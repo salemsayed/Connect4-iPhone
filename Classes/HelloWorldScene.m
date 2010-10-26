@@ -9,9 +9,11 @@
 // Import the interfaces
 #import "HelloWorldScene.h"
 #import "CCTouchDispatcher.h" //For targeted touch interaction
+#include "Connect4AppDelegate.h"
 
 // HelloWorld implementation
 @implementation HelloWorld
+@synthesize turnArrow;
 
 int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 	
@@ -71,9 +73,15 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 		
 		[self addChild:player2Chip];
 		
+		turnArrow = [CCSprite spriteWithFile:@"turnArrow.png"];
+		turnArrow.position = ccp(15, 260);
+		
+		[self addChild:turnArrow];
+		
 		turn = 1;
 		win = 0;
 		gameEnd = FALSE;
+		isAnimating = FALSE;
 		[[CCTouchDispatcher sharedDispatcher] addTargetedDelegate:self
 														 priority:0
 												  swallowsTouches:YES];
@@ -97,7 +105,7 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 
 - (void)ccTouchEnded:(UITouch *)touch withEvent:(UIEvent *)event {
 	
-	if (gameEnd) {
+	if (gameEnd || isAnimating) {
 		return;
 	}
 	int row = 0;
@@ -181,7 +189,11 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 													  selector:@selector(spriteMoveFinished:data:) 
 													data:[chipToDelete objectAtIndex:0] ];
 			id actionPostMove = [CCCallFuncN actionWithTarget:self selector:@selector(highlightWinningPieces:)];
-			[newChip runAction:[CCSequence actions:actionMove, actionMoveDone, actionPostMove, nil]];
+			id actionChangeTurnArrow = [CCCallFuncN actionWithTarget:self selector:@selector(changeTurnArrow:)];
+			id actionAnnounceWinner = [CCCallFunc actionWithTarget:self selector:@selector(announceWinner)];
+			isAnimating = TRUE;
+			[newChip runAction:[CCSequence actions:actionMove, actionMoveDone, 
+								actionPostMove, actionChangeTurnArrow, actionAnnounceWinner, nil]];
 			//newChip.rotation = 30;
 			
 		}
@@ -190,6 +202,23 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 	
 	[chipToDelete release];
 	 
+}
+-(void) announceWinner {
+	if (gameEnd) {
+		Connect4AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
+		[delegate declareWinner];
+	}	
+}
+
+
+-(void) changeTurnArrow:(id)sender {
+	if (!gameEnd) {
+		if (turn == 2) {
+			[turnArrow runAction:[CCMoveTo actionWithDuration:0.5 position:ccp(15, 240)]];	
+		}else {
+			[turnArrow runAction:[CCMoveTo actionWithDuration:0.5 position:ccp(15, 260)]];
+		}
+	}
 }
 
 -(void) checkIfWin:(int)row withCol:(int)col withPlayer:(int)pl
@@ -204,6 +233,21 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 		[self checkWinnerRow:row withCol:col withDirection:k withPlayer:pl];
 		if (win > 4) {
 			gameEnd = TRUE;
+			Connect4AppDelegate *delegate = [[UIApplication sharedApplication] delegate];
+			if (turn == 1) {
+				//player 1 won
+				NSString *winningPlayer = [[NSString alloc] init];
+				winningPlayer = @"Player 1 Wins!";
+				delegate.winner = winningPlayer;
+				[winningPlayer release];
+				
+			}else {
+				NSString *winningPlayer = [[NSString alloc] init];
+				winningPlayer = @"Player 2 Wins!";
+				delegate.winner = winningPlayer;
+				[winningPlayer release];
+			}
+
 			return;
 		}
 	}
@@ -276,6 +320,7 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 -(void)spriteMoveFinished:(id)sender data: (id)toRemove {
 	CCSprite *sprite = (CCSprite *)toRemove;
 	[self removeChild:sprite cleanup:YES];
+	isAnimating = FALSE;
 }
 
 -(void) checkWinnerRow:(int)x withCol: (int)y withDirection: (int)dir withPlayer: (int)pl
@@ -551,7 +596,9 @@ int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 	winningComboX = nil;
 	[winningComboY release];
 	winningComboY = nil;
-
+	[turnArrow release];
+	turnArrow = nil;
+	
 	// don't forget to call "super dealloc"
 	[super dealloc];
 }

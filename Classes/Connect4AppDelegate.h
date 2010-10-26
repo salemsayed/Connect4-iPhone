@@ -10,8 +10,13 @@
 
 @interface Connect4AppDelegate : NSObject <UIApplicationDelegate> {
 	UIWindow *window;
+	NSString *winner;
 }
 
 @property (nonatomic, retain) UIWindow *window;
+@property (nonatomic, retain) NSString *winner;
+
 -(void) startNewGame;
+-(void) declareWinner;
+
 @end

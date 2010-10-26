@@ -15,8 +15,10 @@
 {
 	NSMutableArray *chips, *winningComboX, *winningComboY;
 	int turn, win;
-	BOOL gameEnd;
+	BOOL gameEnd, isAnimating;
+	CCSprite *turnArrow;
 }
+@property (nonatomic, retain) CCSprite *turnArrow;
 // returns a Scene that contains the HelloWorld as the only child
 +(id) scene;
 -(void) drawBoard;
@@ -24,5 +26,7 @@
 -(void) spriteMoveFinished:(id)sender data: (id)toRemove;
 -(void) checkWinnerRow:(int)x withCol: (int)y withDirection: (int)dir withPlayer: (int)pl;
 -(void) highlightWinningPieces:(id)sender;
+-(void) changeTurnArrow:(id)sender;
+-(void) announceWinner;
 
 @end

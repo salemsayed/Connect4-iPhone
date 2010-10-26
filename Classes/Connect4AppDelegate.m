@@ -11,10 +11,12 @@
 #import "HelloWorldScene.h"
 #import "MenuScene.h"
 #import "CCTransition.h"
+#import "WinnerScene.h"
 
 @implementation Connect4AppDelegate
 
 @synthesize window;
+@synthesize winner;
 
 - (void) applicationDidFinishLaunching:(UIApplication*)application
 {
@@ -88,8 +90,13 @@
 	[[CCDirector sharedDirector] replaceScene: [CCFadeTransition transitionWithDuration:1.2f scene:[HelloWorld scene] withColor:ccWHITE]];
 }
 
+- (void)declareWinner {
+	[[CCDirector sharedDirector] replaceScene: [CCFadeTRTransition transitionWithDuration:2 scene:[WinnerScene scene] ]];	
+}
+
 - (void)dealloc {
 	[[CCDirector sharedDirector] release];
+	[window release];
 	[window release];
 	[super dealloc];
 }
