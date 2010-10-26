@@ -9,6 +9,8 @@
 #import "Connect4AppDelegate.h"
 #import "cocos2d.h"
 #import "HelloWorldScene.h"
+#import "MenuScene.h"
+#import "CCTransition.h"
 
 @implementation Connect4AppDelegate
 
@@ -50,7 +52,7 @@
 	[CCTexture2D setDefaultAlphaPixelFormat:kTexture2DPixelFormat_RGBA8888];	
 	
 		
-	[[CCDirector sharedDirector] runWithScene: [HelloWorld scene]];
+	[[CCDirector sharedDirector] runWithScene: [MenuScene scene]];
 }
 
 
@@ -80,6 +82,10 @@
 
 - (void)applicationSignificantTimeChange:(UIApplication *)application {
 	[[CCDirector sharedDirector] setNextDeltaTimeZero:YES];
+}
+
+- (void)startNewGame {
+	[[CCDirector sharedDirector] replaceScene: [CCFadeTransition transitionWithDuration:1.2f scene:[HelloWorld scene] withColor:ccWHITE]];
 }
 
 - (void)dealloc {

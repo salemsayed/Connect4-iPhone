@@ -13,5 +13,5 @@
 }
 
 @property (nonatomic, retain) UIWindow *window;
-
+-(void) startNewGame;
 @end

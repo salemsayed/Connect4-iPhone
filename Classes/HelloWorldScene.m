@@ -13,20 +13,17 @@
 // HelloWorld implementation
 @implementation HelloWorld
 
-/*
-int board[6][7] = { {11, 11, 11, 11, 11, 11, 11},
+int board[6][7] = { {0, 0, 0, 0, 0, 0, 0},
 	
-	{11, 11, 11, 12, 11, 11, 11},
+	{0, 0, 0, 0, 0, 0, 0},
 	
-	{11, 12, 12, 11, 11, 11, 11},
+	{0, 0, 0, 0, 0, 0, 0},
 	
-	{12, 11, 11, 11, 11, 11, 11},
+	{0, 0, 0, 0, 0, 0, 0},
 	
-	{11, 11, 11, 11, 11, 12, 0},
+	{0, 0, 0, 0, 0, 0, 0},
 	
-	{11, 11, 11, 11, 11, 11, 11}};
-*/
-int board[6][7] = {0};
+	{0, 0, 0, 0, 0, 0, 0}};
 
 +(id) scene
 {
@@ -49,13 +46,41 @@ int board[6][7] = {0};
 	// always call "super" init
 	// Apple recommends to re-assign "self" with the "super" return value
 	if( (self=[super initWithColor:ccc4(255,255,255,255)] )) {
-		turn = 1;
 		
+		CCLabel *player1Label = [CCLabel labelWithString:@"Player 1" fontName:@"Arial" fontSize:10];
+		player1Label.color = ccc3(0, 0, 0);
+		player1Label.position = ccp(45, 260);
+		
+		[self addChild:player1Label];
+		
+		CCSprite *player1Chip = [CCSprite spriteWithFile:@"redChip.png"];
+		player1Chip.position = ccp(80, 260);
+		player1Chip.scale = .5f;
+		
+		[self addChild:player1Chip];
+		
+		CCLabel *player2Label = [CCLabel labelWithString:@"Player 2" fontName:@"Arial" fontSize:10];
+		player2Label.color = ccc3(0, 0, 0);
+		player2Label.position = ccp(45, 240);
+		
+		[self addChild:player2Label];
+		
+		CCSprite *player2Chip = [CCSprite spriteWithFile:@"greenChip.png"];
+		player2Chip.position = ccp(80, 240);
+		player2Chip.scale = .5f;
+		
+		[self addChild:player2Chip];
+		
+		turn = 1;
+		win = 0;
+		gameEnd = FALSE;
 		[[CCTouchDispatcher sharedDispatcher] addTargetedDelegate:self
 														 priority:0
 												  swallowsTouches:YES];
 		
-		chips = [[NSMutableArray alloc] init];
+		chips		  = [[NSMutableArray alloc] init];
+		winningComboX = [[NSMutableArray alloc] init];
+		winningComboY = [[NSMutableArray alloc] init];
 		
 		CCSprite *boardSprite = [CCSprite spriteWithFile:@"board.png"];
 		boardSprite.position = ccp(100 + boardSprite.contentSize.width / 2, boardSprite.contentSize.height / 2);
@@ -71,20 +96,28 @@ int board[6][7] = {0};
 }
 
 - (void)ccTouchEnded:(UITouch *)touch withEvent:(UIEvent *)event {
+	
+	if (gameEnd) {
+		return;
+	}
 	int row = 0;
 	int col = 0;
 	NSMutableArray *chipToDelete = [[NSMutableArray alloc] init];
 	CGPoint location = [touch locationInView: [touch view]];
 	CGPoint convertedLocation = [[CCDirector sharedDirector] convertToGL:location];
-	
+
+	BOOL flag = FALSE;
+
 	for (CCSprite *sprite in chips) {
 		CGRect chipRect = CGRectMake(
 									 sprite.position.x - (sprite.contentSize.width/2), 
 									 sprite.position.y - (sprite.contentSize.height/2), 
 									 sprite.contentSize.width, 
 									 sprite.contentSize.height);
-		if (CGRectContainsPoint(chipRect, convertedLocation)) {			
-
+		if (CGRectContainsPoint(chipRect, convertedLocation)) {		
+			
+			flag = TRUE;
+			
 			NSString *rowAndCol = [NSString stringWithFormat:@"%d", sprite.tag];
 			if ([rowAndCol length] == 1) {
 				row = 0;
@@ -95,8 +128,11 @@ int board[6][7] = {0};
 			}			
 		}
 	}
+	if (!flag) {
+		return;
+	}
 	//Traverse rows
-	BOOL flag = FALSE;
+	flag = FALSE;
 	for (int i = 5; i >= 0; i--) {
 		if (board[i][col] != 11 && board[i][col] != 12) {
 			if (turn == 1) {
@@ -127,9 +163,11 @@ int board[6][7] = {0};
 			
 			if (turn == 1) {
 				newChip = [CCSprite spriteWithFile:@"redChip.png"];
+				[self checkIfWin:row withCol:col withPlayer:turn];
 				turn++;
 			}else {
 				newChip = [CCSprite spriteWithFile:@"greenChip.png"];
+				[self checkIfWin:row withCol:col withPlayer:turn];
 				turn--;
 			}
 			
@@ -142,15 +180,50 @@ int board[6][7] = {0};
 			id actionMoveDone = [CCCallFuncND actionWithTarget:self
 													  selector:@selector(spriteMoveFinished:data:) 
 													data:[chipToDelete objectAtIndex:0] ];
-			[newChip runAction:[CCSequence actions:actionMove, actionMoveDone, nil]];
+			id actionPostMove = [CCCallFuncN actionWithTarget:self selector:@selector(highlightWinningPieces:)];
+			[newChip runAction:[CCSequence actions:actionMove, actionMoveDone, actionPostMove, nil]];
 			//newChip.rotation = 30;
-
+			
 		}
 	}
 	[chips replaceObjectAtIndex:[chips indexOfObject:[chipToDelete objectAtIndex:0]] withObject:newChip];
 	
 	[chipToDelete release];
 	 
+}
+
+-(void) checkIfWin:(int)row withCol:(int)col withPlayer:(int)pl
+{
+	for (int k = 1; k < 9; k++) {
+		//This will count the number of pieces in both directions. for an example
+		//--> and <-- starting from the piece just inserted to both directions.
+		//The value of win will indicate if there is a winning situation or not.
+		win = 0;
+		[self checkWinnerRow:row withCol:col withDirection:k withPlayer:pl];
+		k++;
+		[self checkWinnerRow:row withCol:col withDirection:k withPlayer:pl];
+		if (win > 4) {
+			gameEnd = TRUE;
+			return;
+		}
+	}
+}
+
+-(void) highlightWinningPieces:(id) sender
+{
+	if (gameEnd) {
+		int row = 0;
+		int col = 0;
+		for (int k = 1; k < win; k++) {
+			row = [[winningComboX objectAtIndex:[winningComboX count] - k - 1] intValue];
+			col = [[winningComboY objectAtIndex:[winningComboY count] - k - 1] intValue];
+			for (CCSprite *sprite in chips) {
+				if (sprite.tag == ((row * 10) + col)){
+					[sprite setTexture:[[CCTextureCache sharedTextureCache] addImage:@"goldChip.png"]];
+				}
+			}
+		}	
+	}	
 }
 
 -(void) drawBoard 
@@ -163,7 +236,7 @@ int board[6][7] = {0};
 				//Chip is present and belongs to player 1	
 				CCSprite *redChipSprite = [CCSprite spriteWithFile:@"redChip.png"];
 				redChipSprite.position = ccp(xcent + redChipSprite.contentSize.width / 2, 
-											   ycent + redChipSprite.contentSize.height / 2);
+											ycent  + redChipSprite.contentSize.height / 2);
 				redChipSprite.tag = ( i * 10 ) + j;
 				[chips addObject:redChipSprite];
 				
@@ -205,6 +278,265 @@ int board[6][7] = {0};
 	[self removeChild:sprite cleanup:YES];
 }
 
+-(void) checkWinnerRow:(int)x withCol: (int)y withDirection: (int)dir withPlayer: (int)pl
+{	
+	//Base case
+	if ((board[x][y] != 11 && board[x][y] != 12) || x > 5 || y > 6 || x < 0 || y < 0) {
+		return ;
+	}else {
+		switch (dir) {
+			case 1:
+				if (pl == 1 && board[x][y] == 11) {		
+					//NSLog(@"case 1");
+
+					//Adding the current chip to array that has the *probable* winning chips
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+					//Recursive call
+					win++;
+					
+					[self checkWinnerRow:x withCol:y+1 withDirection:1 withPlayer:1];
+				}else if (pl == 2 && board[x][y] == 12) {	
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x withCol:y+1 withDirection:1 withPlayer:2];
+				}
+				break;				
+			case 2:
+				if (pl == 1 && board[x][y] == 11) {		
+					//nslog(@"case 3");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x withCol:y-1 withDirection:2 withPlayer:1];
+				}else if (pl == 2 && board[x][y] == 12) {	
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x withCol:y-1 withDirection:2 withPlayer:2];
+				}				
+				break;
+			case 3:
+				if (pl == 1 && board[x][y] == 11) {
+					//NSlog(@"case 3");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y withDirection:3 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y withDirection:3 withPlayer:2];
+				}				
+				break;
+			case 4:
+				if (pl == 1 && board[x][y] == 11 ) {
+					//cout << "Case 4" << endl;
+					//NSlog(@"case 4");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y withDirection:4 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12 ) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y withDirection:4 withPlayer:2];
+				}				
+				break;
+			case 5:
+				if (pl == 1 && board[x][y] == 11 ) {
+					//cout << "Case 5" << endl;
+					//NSlog(@"case 5");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y+1 withDirection:5 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12 ) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y+1 withDirection:5 withPlayer:2];
+				}				
+				break;
+			case 6:
+				if (pl == 1 && board[x][y] == 11 ) {
+					//cout << "Case 6" << endl;
+					//NSlog(@"case 6");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y-1 withDirection:6 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12 ) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y-1 withDirection:6 withPlayer:2];
+				}
+				break;
+			case 7:
+				if (pl == 1 && board[x][y] == 11 ) {
+					//cout << "Case 7" << endl;
+					//NSlog(@"case 7");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y-1 withDirection:7 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12 ) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x+1 withCol:y-1 withDirection:7 withPlayer:2];
+				}
+				break;
+			case 8:
+				if (pl == 1 && board[x][y] == 11 ) {
+					//cout << "Case 8" << endl;
+					//NSlog(@"case 8");
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y+1 withDirection:8 withPlayer:1];
+
+				}else if (pl == 2 && board[x][y] == 12 ) {
+					
+					NSNumber *rowNum = [[NSNumber alloc] initWithInt:x];
+					NSNumber *colNum = [[NSNumber alloc] initWithInt:y];
+					
+					[winningComboX addObject:rowNum];
+					[winningComboY addObject:colNum];
+					
+					[rowNum release];
+					[colNum release];
+					
+										win++;
+					[self checkWinnerRow:x-1 withCol:y+1 withDirection:8 withPlayer:2];
+				}				
+				break;		
+			default:
+				break;
+		}
+	}
+}
 
 
 // on "dealloc" you need to release all your retained objects
@@ -215,6 +547,11 @@ int board[6][7] = {0};
 	// cocos2d will automatically release all the children (Label)
 	[chips release];
 	chips = nil;
+	[winningComboX release];
+	winningComboX = nil;
+	[winningComboY release];
+	winningComboY = nil;
+
 	// don't forget to call "super dealloc"
 	[super dealloc];
 }
